@@ -1642,7 +1642,7 @@ function updateHeroCurve(gpa){
   document.getElementById("hvMetric2Label").textContent = "Courses counted";
 }
 
-/* ---------- history / cumulative CGPA ---------- */
+/* ---------- history / cumulative GPA ---------- */
 function getHistory(){
   try{ return JSON.parse(localStorage.getItem("statcgpa_history")||"[]"); }
   catch(e){ return []; }
@@ -1679,13 +1679,13 @@ function renderHistory(){
   const body = document.getElementById("historyBody");
   if(h.length===0){
     body.innerHTML = `<div class="history-empty">No saved semesters yet — click "Save to my progress" above to start tracking your CGPA.</div>`;
-    document.getElementById("cumPill").textContent = "Cumulative CGPA — 0.00";
+    document.getElementById("cumPill").textContent = "Cumulative GPA — 0.00";
     return;
   }
   const totalCredit = h.reduce((s,x)=>s+x.credit,0);
   const totalPoint = h.reduce((s,x)=>s+x.gpa*x.credit,0);
   const cgpa = totalCredit ? (totalPoint/totalCredit) : 0;
-  document.getElementById("cumPill").textContent = `Cumulative CGPA — ${cgpa.toFixed(2)}`;
+  document.getElementById("cumPill").textContent = `Cumulative GPA — ${cgpa.toFixed(2)}`;
 
   const SCALE = 4.00; // fixed scale — GPA is always out of 4.00, so bars stay comparable across saves
   body.innerHTML = `
