@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CGPA Calculator ▹ HSTU STT Dept.</title>
+<title>Stat CGPA Calculator</title>
 <meta name="description" content="The official-style CGPA calculator built for HSTU Statistics students featuring auto-loads every course by Level and Semester.">
 
 <link rel="icon" href="assets/hstu-logo.png">
@@ -441,11 +441,14 @@ h2.section-title{
 
 .mode-switch{
   display:inline-flex;
+  flex-wrap:wrap;
+  justify-content:center;
   padding:5px;
   border-radius:100px;
   background:var(--bg-alt);
   border:1px solid var(--border);
   margin-bottom:30px;
+  max-width:100%;
 }
 .mode-btn{
   padding:10px 20px;
@@ -457,6 +460,7 @@ h2.section-title{
   font-size:13.5px;
   cursor:pointer;
   transition:.25s;
+  white-space:nowrap;
 }
 .mode-btn.active{background:var(--teal);color:#04140F;}
 
@@ -642,9 +646,14 @@ h2.section-title{
 
 .result-table{
   width:100%;
+  min-width:460px;
   border-collapse:collapse;
   margin-top:34px;
   font-size:14px;
+}
+.table-scroll{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
 }
 .result-table th{
   text-align:left;
@@ -882,8 +891,6 @@ h2.section-title{
   .nav-links.open{transform:translateY(0);opacity:1;}
   .nav-toggle{display:flex;}
   .feat-grid{grid-template-columns:1fr;}
-  .course-row{grid-template-columns:1fr;grid-template-areas:"code" "name" "credit" "grade" "remove";}
-  .row-remove{justify-self:end;}
   .footer-grid{grid-template-columns:1fr;}
 }
 @media(max-width:480px){
@@ -891,6 +898,10 @@ h2.section-title{
   .section{padding:60px 0;}
   .gpa-display{width:180px;height:180px;}
   .gpa-num{font-size:42px;}
+  .field-grid{grid-template-columns:1fr;}
+  .mode-btn{padding:9px 14px;font-size:12.5px;}
+  .result-table{font-size:12px;}
+  .result-table th, .result-table td{padding:9px 6px;}
 }
 </style>
 </head>
@@ -1108,7 +1119,7 @@ h2.section-title{
         <!-- STEP 1: COURSES -->
         <div class="step" id="step1">
           <div class="dept-banner">
-            <h3 id="deptTitle">🏛 Department of Statistics</h3>
+            <h3 id="deptTitle">📜 Department of Statistics</h3>
             <span class="credit-pill" id="creditPill">0.00 credit hrs</span>
           </div>
           <div class="course-list" id="coursesContainer"></div>
@@ -1132,12 +1143,14 @@ h2.section-title{
             </div>
           </div>
 
-          <table class="result-table">
-            <thead>
-              <tr><th>Code</th><th>Course</th><th>Credit</th><th>Grade</th><th>Point</th></tr>
-            </thead>
-            <tbody id="resultTableBody"></tbody>
-          </table>
+          <div class="table-scroll">
+            <table class="result-table">
+              <thead>
+                <tr><th>Code</th><th>Course</th><th>Credit</th><th>Grade</th><th>Point</th></tr>
+              </thead>
+              <tbody id="resultTableBody"></tbody>
+            </table>
+          </div>
 
           <div class="result-actions">
             <button class="btn btn-primary" onclick="saveToHistory()">💾 Save to my progress</button>
@@ -1456,7 +1469,7 @@ function courseRowHTML(i, code, title, credit, readonly){
 
 function loadAutoCourses(){
   const list = COURSE_DB[state.level][state.semester];
-  document.getElementById("deptTitle").innerHTML = `🏛 Level ${state.level} · Semester ${state.semester} — Statistics`;
+  document.getElementById("deptTitle").innerHTML = `📜 Level ${state.level} · Semester ${state.semester} — Statistics`;
   const container = document.getElementById("coursesContainer");
   container.innerHTML = "";
   list.forEach((c,idx)=>{
@@ -1468,7 +1481,7 @@ function loadAutoCourses(){
 }
 
 function loadManualCourses(count){
-  document.getElementById("deptTitle").innerHTML = `🏛 Department of ${state.department}`;
+  document.getElementById("deptTitle").innerHTML = `📜 Department of ${state.department}`;
   const container = document.getElementById("coursesContainer");
   container.innerHTML = "";
   for(let i=1;i<=count;i++){
@@ -1706,224 +1719,281 @@ function showToast(msg){
 
 /* ---------- PDF export ---------- */
 function gpaRemark(gpa){
-  if(gpa>=3.75) return { label:"Outstanding", color:[45,212,191] };
-  if(gpa>=3.50) return { label:"Excellent",   color:[45,212,191] };
-  if(gpa>=3.00) return { label:"Very Good",   color:[242,184,75] };
-  if(gpa>=2.50) return { label:"Good",        color:[242,184,75] };
-  if(gpa>=2.00) return { label:"Satisfactory",color:[242,184,75] };
-  return { label:"Needs Improvement", color:[255,107,107] };
+  if(gpa>=3.75) return { label:"OUTSTANDING", color:[45,212,191], insight:"A curve that peaks right at the top of the scale — exceptional consistency this term." };
+  if(gpa>=3.50) return { label:"EXCELLENT",   color:[45,212,191], insight:"A strong, right-shifted curve — performance well above the midpoint." };
+  if(gpa>=3.00) return { label:"VERY GOOD",   color:[45,212,191], insight:"A healthy curve centred in the upper range — solid, consistent work." };
+  if(gpa>=2.50) return { label:"GOOD",        color:[242,184,75], insight:"Your curve sits comfortably above the midpoint — steady progress." };
+  if(gpa>=2.00) return { label:"SATISFACTORY",color:[242,184,75], insight:"Your curve sits near the midpoint — there's clear room to push further." };
+  return { label:"NEEDS IMPROVEMENT", color:[255,107,107], insight:"Your curve trails toward the lower range — a focused push next term will shift it right." };
+}
+
+/* small gaussian-style distribution curve, returns the x (mm) of the GPA marker */
+function drawPdfCurve(doc, x, y, w, h, peakFrac, colors){
+  const N = 52, sigma = 0.15;
+  const pts = [];
+  for(let i=0;i<=N;i++){
+    const t = i/N;
+    const g = Math.exp(-((t-peakFrac)**2)/(2*sigma*sigma));
+    pts.push([x + t*w, y + h - g*h*0.92]);
+  }
+  doc.setDrawColor(...colors.fillLine);
+  doc.setLineWidth(5.5);
+  for(let i=0;i<pts.length-1;i++) doc.line(pts[i][0],pts[i][1]+0.01,pts[i+1][0],pts[i+1][1]+0.01);
+
+  doc.setDrawColor(...colors.line);
+  doc.setLineWidth(0.8);
+  for(let i=0;i<pts.length-1;i++) doc.line(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1]);
+
+  doc.setDrawColor(...colors.axis);
+  doc.setLineWidth(0.2);
+  doc.line(x, y+h, x+w, y+h);
+
+  const markerX = x + peakFrac*w;
+  doc.setDrawColor(...colors.marker);
+  doc.setLineWidth(0.45);
+  try{ doc.setLineDashPattern([1,1], 0); }catch(e){}
+  doc.line(markerX, y, markerX, y+h);
+  try{ doc.setLineDashPattern([], 0); }catch(e){}
+  doc.setFillColor(...colors.marker);
+  doc.circle(markerX, y, 1.4, "F");
+
+  return markerX;
+}
+
+/* progress ring made of short arc segments — sweeps clockwise from the top */
+function drawPdfRing(doc, cx, cy, r, frac, trackColor, valueColor, width){
+  doc.setDrawColor(...trackColor);
+  doc.setLineWidth(width);
+  doc.circle(cx, cy, r, "S");
+
+  const steps = Math.max(2, Math.round(80*frac));
+  const start = -Math.PI/2;
+  const end = start + frac*2*Math.PI;
+  doc.setDrawColor(...valueColor);
+  doc.setLineWidth(width);
+  let prev = null;
+  for(let i=0;i<=steps;i++){
+    const a = start + (end-start)*(i/steps);
+    const px = cx + r*Math.cos(a), py = cy + r*Math.sin(a);
+    if(prev) doc.line(prev[0],prev[1],px,py);
+    prev = [px,py];
+  }
 }
 
 async function printPDF(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  const PAGE_W = 210, PAGE_H = 297;
-  const BG = [9,13,24], SURF = [16,23,42], TEAL = [45,212,191], AMBER = [242,184,75], VIOLET = [139,124,246], TEXT=[236,240,251], DIM=[147,158,192];
+  const PAGE_W = 210;
+  const NAVY=[12,18,35], SURF=[18,26,48], SURF2=[22,31,56], LINE=[40,52,84], TEAL=[45,212,191], AMBER=[242,184,75], VIOLET=[139,124,246], CORAL=[255,107,107], TEXT=[236,240,251], DIM=[147,158,192];
 
-  // ---- full-bleed background ----
-  doc.setFillColor(...BG);
-  doc.rect(0,0,PAGE_W,PAGE_H,"F");
+  const gpa = resultData.gpa;
+  const remark = gpaRemark(gpa);
+  const totalCredit = resultData.courses.reduce((s,c)=>s+c.credit,0);
 
-  // faint watermark sigma grid
-  doc.setTextColor(255,255,255);
-  doc.setFont("times","bold");
-  doc.setFontSize(120);
-  doc.saveGraphicsState && doc.saveGraphicsState();
-  try{
-    doc.setGState(new doc.GState({opacity:0.03}));
-    doc.text("σ", 160, 90, {align:"center"});
-    doc.text("σ", 40, 230, {align:"center"});
-  }catch(e){ /* GState not supported in some builds — ignore watermark */ }
-  if(doc.restoreGraphicsState) doc.restoreGraphicsState();
+  /* ---- page background ---- */
+  doc.setFillColor(...NAVY);
+  doc.rect(0,0,PAGE_W,297,"F");
 
-  // ---- top gradient-style banner (layered rects approximate a gradient) ----
-  const bannerH = 40;
-  for(let i=0;i<bannerH;i++){
-    const t = i/bannerH;
-    const r = Math.round(TEAL[0] + (VIOLET[0]-TEAL[0])*t);
-    const g = Math.round(TEAL[1] + (VIOLET[1]-TEAL[1])*t);
-    const b = Math.round(TEAL[2] + (VIOLET[2]-TEAL[2])*t);
-    doc.setFillColor(r,g,b);
-    doc.rect(0,i,PAGE_W,1.1,"F");
-  }
+  /* ---- slim professional header, centered ---- */
+  const HEADER_H = 34;
+  doc.setFillColor(17,25,46);
+  doc.rect(0,0,PAGE_W,HEADER_H,"F");
+  doc.setFillColor(...TEAL);
+  doc.rect(0,HEADER_H,PAGE_W,0.7,"F");
   doc.setFillColor(...AMBER);
-  doc.rect(0,bannerH,PAGE_W,2.2,"F");
+  doc.rect(0,HEADER_H+0.7,PAGE_W,0.4,"F");
 
-  // compact logo badge
   try{
     doc.setFillColor(255,255,255);
-    doc.roundedRect(16,7,25,25,5,5,"F");
-    doc.addImage(LOGO_BASE64, "PNG", 19, 10, 19, 19);
-  }catch(e){ /* image embed failed — continue without it */ }
+    doc.roundedRect(98.5,4,13,13,3,3,"F");
+    doc.addImage(LOGO_BASE64, "PNG", 99.6,5.1,10.8,10.8);
+  }catch(e){}
 
-  // Wrap the long university name instead of allowing it to clip off the page.
   doc.setFont("helvetica","bold");
-  doc.setFontSize(12.8);
+  doc.setFontSize(11.5);
   doc.setTextColor(255,255,255);
-  const universityLines = doc.splitTextToSize(
-    "Hajee Mohammad Danesh Science and Technology University", 136
-  ).slice(0,2);
-  doc.text(universityLines, 48, 15.5, {lineHeightFactor:1.05});
-
+  const uniLines = doc.splitTextToSize("Hajee Mohammad Danesh Science and Technology University", 170).slice(0,2);
+  doc.text(uniLines, 105, 23, {align:"center", lineHeightFactor:1.08});
   doc.setFont("helvetica","normal");
-  doc.setFontSize(9.2);
-  doc.text("Department of Statistics — Official-style Result Sheet", 48, 30.5);
+  doc.setFontSize(7.6);
+  doc.setTextColor(...TEAL);
+  doc.text("DEPARTMENT OF STATISTICS  |  RESULT ANALYTICS SHEET", 105, uniLines.length>1 ? 30.5 : 27, {align:"center"});
 
-  // ---- student info card ----
-  let y = 60;
+  /* ---- compact student identity strip ---- */
+  let y = 42;
   doc.setFillColor(...SURF);
-  doc.roundedRect(16,y,178,34,7,7,"F");
-  doc.setDrawColor(...TEAL);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(16,y,178,34,7,7);
+  doc.roundedRect(10,y,190,15,3,3,"F");
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(10,y,190,15,3,3);
 
-  doc.setFont("helvetica","bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...DIM);
-  doc.text("STUDENT", 26, y+11);
-  doc.text("PROGRAMME", 26, y+24);
-  doc.text("RESULT FOR", 118, y+11);
-  doc.text("TOTAL CREDIT", 118, y+24);
+  const cols = [
+    { label:"STUDENT", value: state.name || "Student" },
+    { label:"PROGRAMME", value: `B.Sc. (Hons.) ${state.department||"Statistics"}` },
+    { label:"SEMESTER", value: state.mode==="auto" ? `Level ${state.level} · Sem ${state.semester}` : "Custom entry" },
+    { label:"CREDIT", value: `${totalCredit.toFixed(2)} hrs` }
+  ];
+  const colW = 190/4;
+  cols.forEach((c,i)=>{
+    const cx = 10 + i*colW + 6;
+    if(i>0){ doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(10+i*colW, y+3, 10+i*colW, y+12); }
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(...DIM);
+    doc.text(c.label, cx, y+5.2);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(8.8);
+    doc.setTextColor(...TEXT);
+    const val = c.value.length>25 ? c.value.slice(0,25)+"…" : c.value;
+    doc.text(val, cx, y+10.8);
+  });
 
-  doc.setFont("helvetica","normal");
-  doc.setFontSize(12.5);
-  doc.setTextColor(...TEXT);
-  doc.text(state.name || "Student", 26, y+17.5);
-  doc.text(`B.Sc. (Hons.) in ${state.department||"Statistics"}`, 26, y+30);
-  doc.text(state.mode==="auto" ? `Level ${state.level} · Semester ${state.semester}` : "Custom entry", 118, y+17.5);
-  const totalCredit = resultData.courses.reduce((s,c)=>s+c.credit,0);
-  doc.text(`${totalCredit.toFixed(2)} credit hours`, 118, y+30);
-
-  // ---- GPA ring + remark badge (top right zone inside card would overlap; place below) ----
-  y += 44;
-  const remark = gpaRemark(resultData.gpa);
+  /* ---- unified results dashboard: GPA ring + live grade curve ---- */
+  y += 21;
+  const cardH = 46;
   doc.setFillColor(...SURF);
-  doc.roundedRect(16,y,84,50,8,8,"F");
+  doc.roundedRect(10,y,190,cardH,5,5,"F");
   doc.setDrawColor(...remark.color);
-  doc.setLineWidth(0.6);
-  doc.roundedRect(16,y,84,50,8,8);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(10,y,190,cardH,5,5);
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
+  doc.line(70,y+5,70,y+cardH-5);
 
-  // ring approximation: outer circle + inner bg circle to fake a donut
-  const cx=58, cy=y+22, rOuter=14;
-  doc.setDrawColor(...remark.color);
-  doc.setLineWidth(3.2);
-  doc.circle(cx,cy,rOuter,"S");
-  doc.setFillColor(...SURF);
-  doc.setDrawColor(...SURF);
-
+  // -- ring --
+  const frac = Math.min(Math.max(gpa/4,0.02),1);
+  const rcx=40, rcy=y+21, rr=14.5;
+  drawPdfRing(doc, rcx, rcy, rr, frac, [46,58,92], remark.color, 3.4);
   doc.setFont("helvetica","bold");
   doc.setFontSize(15);
   doc.setTextColor(...TEXT);
-  doc.text(resultData.gpa.toFixed(2), cx, cy+2, {align:"center"});
+  doc.text(gpa.toFixed(2), rcx, rcy+2, {align:"center"});
   doc.setFont("helvetica","normal");
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setTextColor(...DIM);
-  doc.text("GPA / 4.00", cx, cy+8, {align:"center"});
+  doc.text("OUT OF 4.00", rcx, rcy+6.5, {align:"center"});
 
+  doc.setFillColor(...remark.color);
+  doc.roundedRect(15,y+39,50,6.4,3.2,3.2,"F");
   doc.setFont("helvetica","bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...remark.color);
-  doc.text(remark.label, 58, y+42, {align:"center"});
+  doc.setFontSize(6.6);
+  doc.setTextColor(14,18,28);
+  doc.text(remark.label, 40, y+43.4, {align:"center"});
 
-  // ---- grade legend / distribution card ----
-  const distX = 108, distW = 86;
-  doc.setFillColor(...SURF);
-  doc.roundedRect(distX,y,distW,50,8,8,"F");
-  doc.setDrawColor(38,50,82);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(distX,y,distW,50,8,8);
+  // -- live grade distribution curve --
   doc.setFont("helvetica","bold");
-  doc.setFontSize(8.5);
+  doc.setFontSize(6.5);
   doc.setTextColor(...DIM);
-  doc.text("GRADE DISTRIBUTION", distX+8, y+10);
+  doc.text("YOUR GRADE DISTRIBUTION CURVE", 76, y+7);
 
-  const counts = {};
-  resultData.courses.forEach(c=>{ counts[c.grade] = (counts[c.grade]||0)+1; });
-  const order = ["A+","A","A-","B+","B","B-","C+","C","D","F"];
-  const maxCount = Math.max(1, ...Object.values(counts));
-  let bx = distX+8;
-  const barAreaW = distW-16, barW = barAreaW/order.length - 1.4;
-  order.forEach((g,i)=>{
-    const c = counts[g]||0;
-    const h = c===0 ? 1 : (c/maxCount)*24;
-    const col = g==="F" ? [255,107,107] : (["A+","A","A-"].includes(g) ? TEAL : AMBER);
-    doc.setFillColor(...col);
-    doc.roundedRect(bx, y+40-h, barW, h, 1, 1, "F");
-    doc.setFontSize(5.4);
-    doc.setTextColor(...DIM);
-    doc.text(g, bx+barW/2, y+45, {align:"center"});
-    bx += barW+1.4;
+  const chartX = 76, chartY = y+10, chartW = 118, chartH = 19;
+  const markerX = drawPdfCurve(doc, chartX, chartY, chartW, chartH, frac, {
+    line:TEAL, fillLine:[24,44,58], axis:LINE, marker:AMBER
   });
 
-  // ---- course table ----
-  y += 62;
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(5.6);
+  doc.setTextColor(...DIM);
+  doc.text("0.00", chartX, chartY+chartH+4);
+  doc.text("2.00", chartX+chartW/2, chartY+chartH+4, {align:"center"});
+  doc.text("4.00", chartX+chartW, chartY+chartH+4, {align:"right"});
+
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(6.4);
+  doc.setTextColor(...AMBER);
+  const labelX = Math.min(Math.max(markerX, chartX+16), chartX+chartW-16);
+  doc.text(`YOUR GPA · ${gpa.toFixed(2)}`, labelX, chartY-2.5, {align:"center"});
+
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(6.6);
+  doc.setTextColor(...TEXT);
+  const insightLines = doc.splitTextToSize(remark.insight, 116);
+  doc.text(insightLines, chartX, chartY+chartH+9);
+
+  /* ---- ticket-style perforated divider ---- */
+  y += cardH + 6;
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
+  doc.setLineDashPattern ? doc.setLineDashPattern([1.2,1.2],0) : null;
+  doc.line(10,y,200,y);
+  try{ doc.setLineDashPattern([],0); }catch(e){}
+  doc.setFillColor(...NAVY);
+  doc.circle(10,y,2.4,"F");
+  doc.circle(200,y,2.4,"F");
+  y += 6;
+
+  /* ---- course ledger ---- */
   doc.setFillColor(...AMBER);
-  doc.roundedRect(16,y,178,11,3,3,"F");
+  doc.roundedRect(10,y,190,8,2.4,2.4,"F");
   doc.setTextColor(20,20,20);
   doc.setFont("helvetica","bold");
-  doc.setFontSize(9.5);
-  doc.text("CODE",23,y+7.3);
-  doc.text("COURSE TITLE",53,y+7.3);
-  doc.text("CREDIT",140,y+7.3);
-  doc.text("GRADE",158,y+7.3);
-  doc.text("POINT",178,y+7.3,{align:"right"});
-  y += 11;
+  doc.setFontSize(7.4);
+  doc.text("CODE",18,y+5.4);
+  doc.text("COURSE TITLE",45,y+5.4);
+  doc.text("CREDIT",149,y+5.4,{align:"center"});
+  doc.text("GRADE",167,y+5.4,{align:"center"});
+  doc.text("POINT",194,y+5.4,{align:"right"});
+  y += 8;
 
   resultData.courses.forEach((c,i)=>{
-    if(y > 268){ doc.addPage(); doc.setFillColor(...BG); doc.rect(0,0,PAGE_W,PAGE_H,"F"); y=20; }
-    doc.setFillColor(i%2===0 ? 16:22, i%2===0 ? 23:31, i%2===0 ? 42:56);
-    doc.roundedRect(16,y,178,10.5,2,2,"F");
+    if(y > 268){
+      doc.addPage();
+      doc.setFillColor(...NAVY); doc.rect(0,0,PAGE_W,297,"F");
+      y=14;
+      doc.setFillColor(...AMBER);
+      doc.roundedRect(10,y,190,8,2.4,2.4,"F");
+      doc.setTextColor(20,20,20);
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(7.4);
+      doc.text("CODE",18,y+5.4);
+      doc.text("COURSE TITLE",45,y+5.4);
+      doc.text("CREDIT",149,y+5.4,{align:"center"});
+      doc.text("GRADE",167,y+5.4,{align:"center"});
+      doc.text("POINT",194,y+5.4,{align:"right"});
+      y += 8;
+    }
+    const gcol = c.grade==="F" ? CORAL : (["A+","A","A-"].includes(c.grade) ? TEAL : AMBER);
+    doc.setFillColor(i%2===0 ? SURF[0] : SURF2[0], i%2===0 ? SURF[1] : SURF2[1], i%2===0 ? SURF[2] : SURF2[2]);
+    doc.roundedRect(10,y,190,8.6,1.6,1.6,"F");
+    doc.setFillColor(...gcol);
+    doc.roundedRect(10,y,1.6,8.6,0.8,0.8,"F");
+
     doc.setFont("courier","normal");
-    doc.setFontSize(8);
+    doc.setFontSize(6.8);
     doc.setTextColor(...VIOLET);
-    doc.text(c.code||"-",23,y+7);
+    doc.text(c.code||"-",17,y+5.7);
     doc.setFont("helvetica","normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(...TEXT);
-    doc.text(c.cname.length>36 ? c.cname.slice(0,36)+"…" : c.cname, 53, y+7);
-    doc.text(String(c.credit.toFixed(2)),144,y+7,{align:"center"});
-    const gcol = c.grade==="F" ? [255,107,107] : TEAL;
+    doc.text(c.cname.length>40 ? c.cname.slice(0,40)+"…" : c.cname, 45, y+5.7);
+    doc.text(String(c.credit.toFixed(2)),149,y+5.7,{align:"center"});
     doc.setTextColor(...gcol);
     doc.setFont("helvetica","bold");
-    doc.text(c.grade,161,y+7,{align:"center"});
+    doc.setFontSize(7.6);
+    doc.text(c.grade,167,y+5.7,{align:"center"});
     doc.setFont("helvetica","normal");
     doc.setTextColor(...TEXT);
-    doc.text(c.gp.toFixed(2),186,y+7,{align:"right"});
-    y += 12;
+    doc.setFontSize(8);
+    doc.text(c.gp.toFixed(2),194,y+5.7,{align:"right"});
+    y += 9.6;
   });
 
-  // ---- clean professional document footer ----
-  // Signature / verification placeholders are intentionally omitted.
-  y += 8;
-  if(y > 268){
-    doc.addPage();
-    doc.setFillColor(...BG);
-    doc.rect(0,0,PAGE_W,PAGE_H,"F");
-    y=20;
-  }
-
-  doc.setDrawColor(...TEAL);
-  doc.setLineWidth(0.35);
-  doc.line(16, y, 194, y);
-  y += 7;
-
+  /* ---- slim footer, no signature block ---- */
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
+  doc.line(10, 284, 200, 284);
   doc.setFont("helvetica","normal");
-  doc.setFontSize(7.8);
+  doc.setFontSize(6.8);
   doc.setTextColor(...DIM);
-  const disclaimer = "Unofficial, self-generated result sheet for personal record-keeping - not a substitute for the official transcript.";
-  doc.text(disclaimer, 105, y, {align:"center", maxWidth:178});
-  y += 5.5;
-
-  // Use plain ASCII separators to avoid PDF-font glyph artifacts such as "%1".
-  doc.setFontSize(8);
+  doc.text("It is a self-generated unofficial result sheet — not a substitute for the official transcript.", 105, 289, {align:"center"});
+  doc.setFillColor(...remark.color);
+  doc.circle(83,293.3,0.7,"F");
   doc.setTextColor(...TEAL);
-  doc.textWithLink("CGPA Calculator  |  hasib.is-a.dev", 105, y, {
-    align:"center",
-    url:"https://hasib.is-a.dev"
-  });
+  doc.textWithLink("CGPA Calculator © Hasib Al Tawha", 105, 294, { align:"center", url:"https://stat-cgpa-calc.netlify.app/" });
 
   doc.save(`${(state.name||"Student").replace(/\s+/g,'_')}_L${state.level}S${state.semester}_Result.pdf`);
 }
+
 
 /* ---------- init ---------- */
 document.addEventListener("DOMContentLoaded", renderHistory);
